@@ -1,22 +1,24 @@
-(ns ensemble.entropy)
-
-(defn dotp [xs ys] (reduce + (map * xs ys)))
+(ns ensemble.entropy
+  (:require [ensemble.datasets :refer [split-dataset-on]]))
 
 (defn entropy-inner [p]
   (- (* p (/ (Math/log p) (Math/log 2)))))
 
 (defn entropy
-  ([dataset attr]
-   (let [data (map attr dataset)
+  "Dataset is [xs y]"
+  ([dataset]
+   (let [data  (map second dataset)
          freqs (frequencies data)
          total (reduce + (vals freqs))
          probs (map #(/ % total) (vals freqs))]
      (reduce + (map entropy-inner probs)))))
 
 (defn information-gain
-  ([dataset attr group-fn]
-   (let [subsets (group-by group-fn dataset)
+  "dataset is [xs y]
+   attr is index of xs to calculate possible split"
+  ([dataset attr]
+   (let [subsets (split-dataset-on dataset attr)
          n (count dataset)]
-     (- (entropy dataset attr)
+     (- (entropy dataset)
         (reduce + (for [[_ subset] subsets]
-                    (* (/ (count subset) n) (entropy subset attr))))))))
+                    (* (/ (count subset) n) (entropy subset))))))))

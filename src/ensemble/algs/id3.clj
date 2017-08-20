@@ -1,24 +1,57 @@
 (ns ensemble.algs.id3
   (:require [ensemble.entropy :refer :all]
-            [ensemble.datasets :refer [class-seq]]))
+            [ensemble.datasets :as ds :refer [split-dataset-on]]
+            [loom.io :refer [view]]
+            [loom.label :as ll]
+            [loom.graph :as lg]))
 
-(defn node [x] x)
+(defn node [dataset]
+  (ffirst (max-key val (frequencies (map second dataset)))))
 
-(defn id3 [dataset ->target-attribute]
-  (let [classes (map ->target-attribute dataset)]
-    (if (apply = classes)
-      (node (first classes))
-      (let [num-attrs (-> dataset first count dec)
-            attribute-accessors (map ->nther (range num-attrs))
-            [split-attr gain] (apply max-key
-                                     val
-                                     (zipmap (range num-attrs)
-                                             (map (partial information-gain dataset)
-                                                  attribute-accessors
-                                                  attribute-accessors)))
-            _ (println (format "splitting on %s with gain %s" split-attr gain))
-            new-datasets (group-by (nth attribute-accessors split-attr) dataset)]
-        {split-attr
+(defn id3
+  "Takes as input tuples of the form [xs y]"
+  [dataset & {:keys [max-depth] :or {max-depth Long/MAX_VALUE}}]
+  (let [classes (map second dataset)]
+    (if (or (= 0 max-depth)
+            (apply = classes))
+      (node dataset)
+      (let [num-attrs (-> dataset ffirst count)
+            [best-attr gain]
+            (apply max-key
+                   val
+                   (zipmap (range num-attrs)
+                           (map (partial information-gain dataset)
+                                (range num-attrs))))
+            new-datasets (split-dataset-on dataset best-attr)]
+        [best-attr
          (into {} (for [[attr-val dataset] new-datasets]
-                    [attr-val (id3 dataset)]))}
-        ))))
+                    [attr-val (id3 dataset :max-depth (dec max-depth))]))]))))
+
+(defn classify [decision-tree xs]
+  (if-not (vector? decision-tree)
+    decision-tree
+    (let [[attr subtree] decision-tree]
+      (recur (get subtree (get xs attr)) xs))))
+
+(defn flatten-tree [decision-tree]
+  (println decision-tree)
+  (cond
+    (vector? decision-tree)
+    (let [[root splits] decision-tree
+          grpd (group-by (comp vector? val) splits)
+          base (into #{}
+                     (map (fn [[split-val to]] [[root to] split-val]))
+                     (get grpd false))
+          _ (println base)
+          all-edges (into base (for [[attr-val [new-root _]] (get grpd true)]
+                                 [[root new-root] attr-val]))]
+      (apply merge-with into {:edges all-edges} (map (comp flatten-tree second) (get grpd true))))
+    :else
+    {:nodes #{decision-tree}}))
+
+(defn view-tree [decision-tree]
+  (let [flattened-tree (flatten-tree decision-tree)]
+    (view
+     (cond-> (apply ll/add-labeled-edges (lg/digraph) (apply concat (:edges flattened-tree)))
+       (:nodes flattened-tree)
+       (#(apply lg/add-nodes % (:nodes flattened-tree)))))))

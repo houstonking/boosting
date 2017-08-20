@@ -1,7 +1,5 @@
 (ns ensemble.core-test
   (:require [clojure.test :refer :all]
-            [ensemble.core :refer :all]))
-
-(deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+            [ensemble.validation :refer [k-fold-cross-val]]
+            [ensemble.datasets :as ds]
+            [ensemble.algs.id3 :as id3]))
